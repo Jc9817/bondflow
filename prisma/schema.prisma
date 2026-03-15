@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id                  String   @id @default(cuid())
+  fullName            String
+  companyRegistration String?
+  contactPerson       String?
+  phone               String?
+  email               String?
+  idNumber            String?
+  address             String?
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  cases               Case[]
+  jobs                Upload[]
+}
+
+model Case {
+  id         String     @id @default(cuid())
+  customerId String
+  caseType   String
+  caseStatus CaseStatus @default(OPEN)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  customer   Customer   @relation(fields: [customerId], references: [id])
+  jobs       Upload[]
+}
+
+enum CaseStatus {
+  OPEN
+  CLOSED
+}
+
+model Upload {
+  id          String    @id @default(cuid())
+  fileName    String
+  filePath    String
+  contentType String?
+  size        Int?
+  status      JobStatus @default(UPLOADED)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  caseId      String?
+  case        Case?     @relation(fields: [caseId], references: [id])
+
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+
+  draft       ExtractionDraft?
+  approved    ApprovedData?
+}
+
+enum JobStatus {
+  UPLOADED
+  EXTRACTING
+  REVIEW
+  CONFIRMED
+}
+
+model ExtractionDraft {
+  id          String  @id @default(cuid())
+  uploadId    String  @unique
+  amount      Float?
+  currency    String?
+  date        String?
+  referenceNo String?
+
+  upload      Upload  @relation(fields: [uploadId], references: [id])
+}
+
+model ApprovedData {
+  id          String   @id @default(cuid())
+  uploadId    String   @unique
+  amount      Float?
+  currency    String?
+  date        String?
+  referenceNo String?
+  confirmedAt DateTime @default(now())
+
+  upload      Upload   @relation(fields: [uploadId], references: [id])
+}
