@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/prisma/lib/prisma";
 
-// GET /api/customers/[id]
 export async function GET(
   _: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -11,6 +10,7 @@ export async function GET(
   const customer = await prisma.customer.findUnique({
     where: { id },
     include: {
+      contacts: { orderBy: { createdAt: "asc" } },
       cases: {
         include: {
           jobs: {
@@ -34,7 +34,6 @@ export async function GET(
   return NextResponse.json({ customer });
 }
 
-// PATCH /api/customers/[id]
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -51,8 +50,8 @@ export async function PATCH(
       where: { id },
       data: {
         fullName:            body.fullName?.trim()            || undefined,
+        companyName:         body.companyName?.trim()         ?? null,
         companyRegistration: body.companyRegistration?.trim() ?? null,
-        contactPerson:       body.contactPerson?.trim()       ?? null,
         phone:               body.phone?.trim()               ?? null,
         email:               body.email?.trim()               ?? null,
         idNumber:            body.idNumber?.trim()            ?? null,
@@ -63,7 +62,6 @@ export async function PATCH(
 
     return NextResponse.json({ customer });
   } catch (err: any) {
-    console.error("PATCH /api/customers/[id] error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

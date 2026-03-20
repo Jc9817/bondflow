@@ -3,12 +3,18 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-type ExtractedData = { amount: number | null; currency: string | null; date: string | null; reference_no: string | null };
-type Customer = { id: string; fullName: string; phone?: string; idNumber?: string; companyRegistration?: string };
-type CaseItem = { id: string; caseType: string; caseStatus: string };
-type Status = "idle" | "loading" | "done" | "error";
+type ExtractedData = {
+  amount: number | null; currency: string | null;
+  date: string | null; reference_no: string | null;
+};
+type Customer = {
+  id: string; fullName: string; phone?: string;
+  companyName?: string; companyRegistration?: string;
+};
+type CaseItem  = { id: string; caseType: string; caseStatus: string };
+type Status    = "idle" | "loading" | "done" | "error";
 
-const CASE_TYPES = ["Bond Application", "Insurance", "Invoice", "Other"];
+const CASE_TYPES = ["Bond Application", "Insurance", "Invoice", "Loan", "Other"];
 
 export default function ReviewPage() {
   const router = useRouter();
@@ -21,24 +27,28 @@ export default function ReviewPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(filePath ?? null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Extraction state
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError]   = useState<string | null>(null);
-  const [fields, setFields] = useState<ExtractedData>({ amount: null, currency: null, date: null, reference_no: null });
+  const [fields, setFields] = useState<ExtractedData>({
+    amount: null, currency: null, date: null, reference_no: null,
+  });
 
-  // CRM
-  const [custSearch,   setCustSearch]   = useState("");
-  const [custResults,  setCustResults]  = useState<Customer[]>([]);
-  const [selectedCust, setSelectedCust] = useState<Customer | null>(null);
-  const [cases,        setCases]        = useState<CaseItem[]>([]);
-  const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
-  const [showNewCust,  setShowNewCust]  = useState(false);
-  const [showNewCase,  setShowNewCase]  = useState(false);
-  const [newCustName,  setNewCustName]  = useState("");
-  const [newCustPhone, setNewCustPhone] = useState("");
-  const [newCaseType,  setNewCaseType]  = useState(CASE_TYPES[0]);
-  const [confirming,   setConfirming]   = useState(false);
+  // CRM linking state
+  const [custSearch,    setCustSearch]    = useState("");
+  const [custResults,   setCustResults]   = useState<Customer[]>([]);
+  const [selectedCust,  setSelectedCust]  = useState<Customer | null>(null);
+  const [cases,         setCases]         = useState<CaseItem[]>([]);
+  const [selectedCase,  setSelectedCase]  = useState<CaseItem | null>(null);
+  const [showNewCust,   setShowNewCust]   = useState(false);
+  const [showNewCase,   setShowNewCase]   = useState(false);
+  const [newCustName,   setNewCustName]   = useState("");
+  const [newCustPhone,  setNewCustPhone]  = useState("");
+  const [newCustCompany,setNewCustCompany]= useState("");
+  const [newCaseType,   setNewCaseType]   = useState(CASE_TYPES[0]);
+  const [confirming,    setConfirming]    = useState(false);
 
-  // Search customers
+  // Debounced customer search
   useEffect(() => {
     if (!custSearch.trim()) { setCustResults([]); return; }
     const t = setTimeout(async () => {
@@ -49,7 +59,7 @@ export default function ReviewPage() {
     return () => clearTimeout(t);
   }, [custSearch]);
 
-  // Load open cases when customer selected
+  // Load open cases when customer is selected
   useEffect(() => {
     if (!selectedCust) { setCases([]); setSelectedCase(null); return; }
     fetch(`/api/cases?customerId=${selectedCust.id}`)
@@ -71,7 +81,7 @@ export default function ReviewPage() {
     if (!file && !filePath) return;
     setStatus("loading"); setError(null);
     try {
-      let body = new FormData();
+      const body = new FormData();
       if (file) {
         body.append("file", file);
       } else {
@@ -84,7 +94,8 @@ export default function ReviewPage() {
       setFields(json.data);
       setStatus("done");
     } catch (err: any) {
-      setError(err?.message || "Network error"); setStatus("error");
+      setError(err?.message || "Network error");
+      setStatus("error");
     }
   }
 
@@ -93,12 +104,17 @@ export default function ReviewPage() {
     const res  = await fetch("/api/customers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fullName: newCustName, phone: newCustPhone }),
+      body: JSON.stringify({
+        fullName:    newCustName,
+        phone:       newCustPhone,
+        companyName: newCustCompany,
+      }),
     });
     const data = await res.json();
     if (!res.ok) { alert(data.error); return; }
     setSelectedCust(data.customer);
-    setShowNewCust(false); setNewCustName(""); setNewCustPhone("");
+    setShowNewCust(false);
+    setNewCustName(""); setNewCustPhone(""); setNewCustCompany("");
   }
 
   async function createCase() {
@@ -110,21 +126,25 @@ export default function ReviewPage() {
     });
     const data = await res.json();
     if (!res.ok) { alert(data.error); return; }
-    setSelectedCase(data.case); setShowNewCase(false);
+    setSelectedCase(data.case);
+    setShowNewCase(false);
   }
 
-  // ✅ Confirm: saves approved data, links customerId AND caseId to the job
+  // ✅ CONFIRM: saves extracted data + links customerId + caseId to the job
   async function onConfirm() {
+    if (!selectedCust) {
+      if (!window.confirm("No customer selected. Confirm without linking to a customer?")) return;
+    }
     setConfirming(true);
     try {
       if (fileId) {
-        await fetch(`/api/uploads/${fileId}`, {
+        const res = await fetch(`/api/uploads/${fileId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             status:     "CONFIRMED",
-            caseId:     selectedCase?.id    ?? null,
-            customerId: selectedCust?.id    ?? null,   // ✅ link to customer directly
+            customerId: selectedCust?.id  ?? null,
+            caseId:     selectedCase?.id  ?? null,
             approved: {
               amount:      fields.amount,
               currency:    fields.currency,
@@ -133,8 +153,16 @@ export default function ReviewPage() {
             },
           }),
         });
+        if (!res.ok) {
+          const data = await res.json();
+          alert(data.error || "Failed to confirm");
+          return;
+        }
       }
-      alert("✅ Confirmed and saved!");
+      alert(selectedCust
+        ? `✅ Confirmed and linked to ${selectedCust.fullName}!`
+        : "✅ Confirmed without customer link."
+      );
       router.push("/dashboard");
     } catch (err: any) {
       alert(err?.message || "Confirm failed");
@@ -143,29 +171,37 @@ export default function ReviewPage() {
     }
   }
 
-  const isPdf   = file?.type === "application/pdf" || (filePath ?? "").endsWith(".pdf");
-  const hasDoc  = file || filePath;
+  const isPdf  = file?.type === "application/pdf" || (filePath ?? "").endsWith(".pdf");
+  const hasDoc = file || filePath;
 
   return (
     <div style={s.page}>
+      {/* Header */}
       <header style={s.header}>
         <div>
           <div style={s.logo}>🔍 Review Document</div>
           <p style={s.tagline}>Extract fields · Link to customer · Confirm</p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <button style={s.menuBtn} onClick={() => router.push("/login")}>⬅ Menu</button>
+          <button style={s.menuBtn} onClick={() => router.push("/login")}>🏠</button>
           <a href="/dashboard" style={s.backBtn}>← Dashboard</a>
         </div>
       </header>
 
+      {/* File picker bar (only when no fileId from dashboard) */}
       {!fileId && (
         <div style={s.uploadBar}>
           <input ref={inputRef} type="file" accept=".pdf,image/*" onChange={onPickFile} style={{ display: "none" }} />
-          <button style={s.chooseBtn} onClick={() => inputRef.current?.click()}>{file ? "Change file" : "Choose file"}</button>
+          <button style={s.chooseBtn} onClick={() => inputRef.current?.click()}>
+            {file ? "Change file" : "Choose file"}
+          </button>
           {file && <span style={s.fileSpan}>{file.name}</span>}
           {hasDoc && (
-            <button style={{ ...s.blueBtn, opacity: status === "loading" ? 0.6 : 1 }} onClick={onExtract} disabled={status === "loading"}>
+            <button
+              style={{ ...s.blueBtn, opacity: status === "loading" ? 0.6 : 1 }}
+              onClick={onExtract}
+              disabled={status === "loading"}
+            >
               {status === "loading" ? "Extracting…" : "Extract with AI"}
             </button>
           )}
@@ -174,28 +210,36 @@ export default function ReviewPage() {
 
       {hasDoc ? (
         <div style={s.columns}>
-          {/* LEFT - Preview */}
+
+          {/* ── LEFT: Document Preview ── */}
           <div style={s.card}>
             <div style={s.cardTitle}>Document Preview</div>
             {isPdf
               ? <iframe src={previewUrl!} style={s.preview} title="PDF" />
-              : <img src={previewUrl!} alt="preview" style={{ ...s.preview, objectFit: "contain" }} />}
+              : <img src={previewUrl!} alt="preview" style={{ ...s.preview, objectFit: "contain" }} />
+            }
             {fileId && (
-              <button style={{ ...s.blueBtn, opacity: status === "loading" ? 0.6 : 1 }} onClick={onExtract} disabled={status === "loading"}>
+              <button
+                style={{ ...s.blueBtn, opacity: status === "loading" ? 0.6 : 1 }}
+                onClick={onExtract}
+                disabled={status === "loading"}
+              >
                 {status === "loading" ? "Extracting…" : "Extract with AI"}
               </button>
             )}
           </div>
 
-          {/* RIGHT - Fields + CRM */}
+          {/* ── RIGHT: Fields + CRM ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
             {/* Extracted Fields */}
             <div style={s.card}>
               <div style={s.cardTitle}>Extracted Fields</div>
-              {status === "loading" && <div style={s.row}><div style={s.spinner} /><span style={{ marginLeft: 10, color: "#64748b" }}>Analysing…</span></div>}
-              {status === "error"   && <div style={s.errorBox}>⚠️ {error}</div>}
-              {status === "idle"    && <div style={s.hintBox}>Click <strong>Extract with AI</strong> to analyse the document.</div>}
+              {status === "loading" && (
+                <div style={s.row}><div style={s.spinner} /><span style={{ marginLeft: 10, color: "#64748b" }}>Analysing…</span></div>
+              )}
+              {status === "error" && <div style={s.errorBox}>⚠️ {error}</div>}
+              {status === "idle"  && <div style={s.hintBox}>Click <strong>Extract with AI</strong> to analyse.</div>}
               {(status === "done" || status === "idle") && (
                 <div style={s.form}>
                   {(["amount", "currency", "date", "reference_no"] as const).map((key) => (
@@ -204,9 +248,19 @@ export default function ReviewPage() {
                       <input
                         type={key === "amount" ? "number" : "text"}
                         value={fields[key] !== null ? String(fields[key]) : ""}
-                        onChange={(e) => setFields((p) => ({ ...p, [key]: e.target.value === "" ? null : key === "amount" ? Number(e.target.value) : e.target.value }))}
+                        onChange={(e) => setFields((p) => ({
+                          ...p,
+                          [key]: e.target.value === "" ? null
+                            : key === "amount" ? Number(e.target.value)
+                            : e.target.value,
+                        }))}
                         style={{ ...s.fInput, background: fields[key] ? "#f0fdf4" : "white" }}
-                        placeholder={key === "amount" ? "e.g. 1250.00" : key === "currency" ? "e.g. MYR" : key === "date" ? "YYYY-MM-DD" : "e.g. INV-001"}
+                        placeholder={
+                          key === "amount"       ? "e.g. 1250.00"  :
+                          key === "currency"     ? "e.g. MYR"      :
+                          key === "date"         ? "YYYY-MM-DD"    :
+                          "e.g. INV-001"
+                        }
                       />
                     </div>
                   ))}
@@ -214,38 +268,55 @@ export default function ReviewPage() {
               )}
             </div>
 
-            {/* Link Customer */}
+            {/* ✅ Link Customer — core business step */}
             <div style={s.card}>
               <div style={s.cardTitle}>🔗 Link to Customer</div>
-              <p style={s.hintSmall}>Linking saves this document under the customer's profile.</p>
+              <p style={s.hintSmall}>
+                Link this document to a customer so it appears in their profile.
+              </p>
+
               {selectedCust ? (
                 <div style={s.selBox}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700 }}>{selectedCust.fullName}</div>
-                    {selectedCust.phone && <div style={{ fontSize: 12, color: "#64748b" }}>📞 {selectedCust.phone}</div>}
-                    {selectedCust.companyRegistration && <div style={{ fontSize: 12, color: "#64748b" }}>🏢 {selectedCust.companyRegistration}</div>}
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedCust.fullName}</div>
+                    {selectedCust.companyName && <div style={{ fontSize: 12, color: "#64748b" }}>🏢 {selectedCust.companyName}</div>}
+                    {selectedCust.phone       && <div style={{ fontSize: 12, color: "#64748b" }}>📞 {selectedCust.phone}</div>}
                   </div>
-                  <button style={s.clearBtn} onClick={() => { setSelectedCust(null); setSelectedCase(null); }}>Change</button>
+                  <button style={s.clearBtn} onClick={() => { setSelectedCust(null); setSelectedCase(null); }}>
+                    Change
+                  </button>
                 </div>
               ) : (
                 <>
-                  <input style={s.searchInput} placeholder="Search by name, phone, company reg…" value={custSearch} onChange={(e) => setCustSearch(e.target.value)} />
+                  <input
+                    style={s.searchInput}
+                    placeholder="Search by name, company, phone…"
+                    value={custSearch}
+                    onChange={(e) => setCustSearch(e.target.value)}
+                  />
                   {custResults.length > 0 && (
                     <div style={s.dropList}>
                       {custResults.map((c) => (
-                        <div key={c.id} style={s.dropItem} onClick={() => { setSelectedCust(c); setCustSearch(""); setCustResults([]); }}>
+                        <div
+                          key={c.id}
+                          style={s.dropItem}
+                          onClick={() => { setSelectedCust(c); setCustSearch(""); setCustResults([]); }}
+                        >
                           <strong>{c.fullName}</strong>
-                          {c.phone && <span style={{ color: "#64748b", marginLeft: 8 }}>{c.phone}</span>}
-                          {c.companyRegistration && <span style={{ color: "#94a3b8", marginLeft: 8, fontSize: 11 }}>{c.companyRegistration}</span>}
+                          {c.companyName && <span style={{ color: "#64748b", marginLeft: 8 }}>{c.companyName}</span>}
+                          {c.phone       && <span style={{ color: "#94a3b8", marginLeft: 8, fontSize: 12 }}>{c.phone}</span>}
                         </div>
                       ))}
                     </div>
                   )}
-                  <button style={s.ghostBtn} onClick={() => setShowNewCust((p) => !p)}>+ Create new customer</button>
+                  <button style={s.ghostBtn} onClick={() => setShowNewCust((p) => !p)}>
+                    + Create new customer
+                  </button>
                   {showNewCust && (
                     <div style={s.inlineForm}>
-                      <input style={s.fInput} placeholder="Full Name *" value={newCustName} onChange={(e) => setNewCustName(e.target.value)} />
-                      <input style={s.fInput} placeholder="Phone"       value={newCustPhone} onChange={(e) => setNewCustPhone(e.target.value)} />
+                      <input style={s.fInput} placeholder="Full Name *"    value={newCustName}    onChange={(e) => setNewCustName(e.target.value)} />
+                      <input style={s.fInput} placeholder="Company Name"   value={newCustCompany} onChange={(e) => setNewCustCompany(e.target.value)} />
+                      <input style={s.fInput} placeholder="Phone"          value={newCustPhone}   onChange={(e) => setNewCustPhone(e.target.value)} />
                       <button style={s.darkBtn} onClick={createCustomer}>Save Customer</button>
                     </div>
                   )}
@@ -253,15 +324,17 @@ export default function ReviewPage() {
               )}
             </div>
 
-            {/* Link Case */}
+            {/* ✅ Link Case — optional grouping under customer */}
             {selectedCust && (
               <div style={s.card}>
                 <div style={s.cardTitle}>📁 Link to Case <span style={{ fontSize: 12, fontWeight: 400, color: "#94a3b8" }}>(optional)</span></div>
+                <p style={s.hintSmall}>Group this document under a case/transaction.</p>
+
                 {selectedCase ? (
                   <div style={s.selBox}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700 }}>{selectedCase.caseType}</div>
-                      <div style={{ fontSize: 12, color: "#15803d" }}>OPEN</div>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedCase.caseType}</div>
+                      <div style={{ fontSize: 12, color: "#15803d" }}>● OPEN</div>
                     </div>
                     <button style={s.clearBtn} onClick={() => setSelectedCase(null)}>Change</button>
                   </div>
@@ -279,7 +352,9 @@ export default function ReviewPage() {
                     ) : (
                       <div style={s.hintBox}>No open cases for this customer.</div>
                     )}
-                    <button style={s.ghostBtn} onClick={() => setShowNewCase((p) => !p)}>+ Create new case</button>
+                    <button style={s.ghostBtn} onClick={() => setShowNewCase((p) => !p)}>
+                      + Create new case
+                    </button>
                     {showNewCase && (
                       <div style={s.inlineForm}>
                         <select style={s.fInput} value={newCaseType} onChange={(e) => setNewCaseType(e.target.value)}>
@@ -293,10 +368,14 @@ export default function ReviewPage() {
               </div>
             )}
 
-            {/* Confirm */}
+            {/* ✅ Confirm button — only show after extraction */}
             {status === "done" && (
-              <button style={{ ...s.confirmBtn, opacity: confirming ? 0.6 : 1 }} onClick={onConfirm} disabled={confirming}>
-                {confirming ? "Saving…" : "✓ Confirm & Save"}
+              <button
+                style={{ ...s.confirmBtn, opacity: confirming ? 0.6 : 1 }}
+                onClick={onConfirm}
+                disabled={confirming}
+              >
+                {confirming ? "Saving…" : selectedCust ? `✓ Confirm & Link to ${selectedCust.fullName}` : "✓ Confirm & Save"}
               </button>
             )}
           </div>
@@ -307,6 +386,7 @@ export default function ReviewPage() {
           <div style={{ color: "#475569", marginTop: 8 }}>Choose a PDF or image to get started.</div>
         </div>
       )}
+
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -317,7 +397,7 @@ const s: Record<string, React.CSSProperties> = {
   header:     { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 28px", background: "white", borderBottom: "1px solid rgba(15,23,42,0.08)" },
   logo:       { fontSize: 20, fontWeight: 800, color: "#0f172a" },
   tagline:    { margin: "2px 0 0", fontSize: 12, color: "#94a3b8" },
-  menuBtn:    { padding: "10px 14px", borderRadius: 10, background: "#f8fafc", color: "#0f172a", border: "1px solid rgba(15,23,42,0.15)", fontWeight: 700, fontSize: 13, cursor: "pointer" },
+  menuBtn:    { padding: "10px 14px", borderRadius: 10, background: "#f8fafc", color: "#0f172a", border: "1px solid rgba(15,23,42,0.15)", fontWeight: 700, fontSize: 16, cursor: "pointer" },
   backBtn:    { padding: "10px 14px", borderRadius: 10, background: "white", color: "#475569", border: "1px solid rgba(15,23,42,0.12)", fontWeight: 600, fontSize: 13, textDecoration: "none" },
   uploadBar:  { display: "flex", alignItems: "center", gap: 12, padding: "14px 28px", background: "white", borderBottom: "1px solid rgba(15,23,42,0.06)" },
   chooseBtn:  { padding: "10px 18px", borderRadius: 10, border: "1px solid rgba(15,23,42,0.15)", background: "white", cursor: "pointer", fontWeight: 700, fontSize: 14, color: "#0f172a" },
@@ -343,6 +423,6 @@ const s: Record<string, React.CSSProperties> = {
   selBox:     { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: 14, display: "flex", alignItems: "center", gap: 10 },
   clearBtn:   { fontSize: 12, color: "#64748b", background: "none", border: "none", cursor: "pointer", fontWeight: 600 },
   inlineForm: { display: "flex", flexDirection: "column", gap: 8, padding: 12, background: "#f8fafc", borderRadius: 10 },
-  confirmBtn: { padding: "14px 20px", borderRadius: 12, border: "none", background: "#16a34a", color: "white", cursor: "pointer", fontWeight: 800, fontSize: 16, width: "100%" },
+  confirmBtn: { padding: "14px 20px", borderRadius: 12, border: "none", background: "#16a34a", color: "white", cursor: "pointer", fontWeight: 800, fontSize: 15, width: "100%" },
   empty:      { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 24px", textAlign: "center" as const },
 };

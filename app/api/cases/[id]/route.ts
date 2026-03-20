@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/prisma/lib/prisma";
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  _: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
   const c = await prisma.case.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       customer: true,
       jobs: {
-        include: { approved: true, draft: true },
+        include: { approved: true },
         orderBy: { createdAt: "desc" },
       },
     },
@@ -16,11 +20,15 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   return NextResponse.json({ case: c });
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const body = await req.json();
+    const { id } = await params;
+    const body   = await req.json();
     const updated = await prisma.case.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         caseType:   body.caseType,
         caseStatus: body.caseStatus,
