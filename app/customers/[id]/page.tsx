@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Sidebar from "@/components/Sidebar";
+import Navbar from "@/components/Navbar";
 
 type ContactPerson = { id: string; name: string; phone?: string; email?: string };
 type ApprovedData  = { amount?: number | null; currency?: string | null; date?: string | null; referenceNo?: string | null };
@@ -26,14 +26,14 @@ const EMPTY_CONTACT = { name: "", phone: "", email: "" };
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router  = useRouter();
-  const [customer, setCustomer]         = useState<Customer | null>(null);
-  const [loading, setLoading]           = useState(true);
-  const [editing, setEditing]           = useState(false);
-  const [saving, setSaving]             = useState(false);
-  const [editForm, setEditForm]         = useState<Partial<Customer>>({});
-  const [editError, setEditError]       = useState("");
+  const [customer, setCustomer]           = useState<Customer | null>(null);
+  const [loading, setLoading]             = useState(true);
+  const [editing, setEditing]             = useState(false);
+  const [saving, setSaving]               = useState(false);
+  const [editForm, setEditForm]           = useState<Partial<Customer>>({});
+  const [editError, setEditError]         = useState("");
   const [showAddContact, setShowAddContact] = useState(false);
-  const [newContact, setNewContact]     = useState(EMPTY_CONTACT);
+  const [newContact, setNewContact]       = useState(EMPTY_CONTACT);
   const [savingContact, setSavingContact] = useState(false);
 
   useEffect(() => {
@@ -72,20 +72,19 @@ export default function CustomerDetailPage() {
     setCustomer((prev) => prev ? { ...prev, contacts: prev.contacts.filter((c) => c.id !== contactId) } : prev);
   }
 
-  if (loading) return <div style={s.loading}>Loading…</div>;
+  if (loading)   return <div style={s.loading}>Loading…</div>;
   if (!customer) return <div style={s.loading}>Customer not found.</div>;
 
   const allJobs       = [...customer.jobs, ...customer.cases.flatMap((c) => c.jobs)];
-  const totalDocs     = allJobs.length;
   const confirmed     = allJobs.filter((j) => j.status === "CONFIRMED").length;
   const pendingReview = allJobs.filter((j) => j.status === "REVIEW").length;
   const openCases     = customer.cases.filter((c) => c.caseStatus === "OPEN").length;
 
   return (
-    <div style={s.shell}>
-      <Sidebar />
+    <div style={s.page}>
+      <Navbar />
       <div style={s.main}>
-        {/* Top bar — no home btn, Customers on top right */}
+        {/* Top bar */}
         <div style={s.topbar}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <div style={s.avatar}>{customer.fullName[0].toUpperCase()}</div>
@@ -94,19 +93,16 @@ export default function CustomerDetailPage() {
               {customer.companyName && <div style={s.subName}>🏢 {customer.companyName}</div>}
             </div>
           </div>
-          {/* ✅ Customers button top right */}
-          <div style={{ display: "flex", gap: 10 }}>
-            <button style={s.ghostBtn} onClick={() => router.push("/customers")}>← Customers</button>
-          </div>
+          <button style={s.ghostBtn} onClick={() => router.push("/customers")}>← Customers</button>
         </div>
 
         {/* Stats */}
         <div style={s.statsBar}>
           {[
-            { label: "Total Docs",     value: totalDocs,     color: "#0369a1" },
-            { label: "Confirmed",      value: confirmed,     color: "#15803d" },
-            { label: "Pending Review", value: pendingReview, color: "#b45309" },
-            { label: "Open Cases",     value: openCases,     color: "#7c3aed" },
+            { label: "Total Docs",     value: allJobs.length, color: "#0369a1" },
+            { label: "Confirmed",      value: confirmed,      color: "#15803d" },
+            { label: "Pending Review", value: pendingReview,  color: "#b45309" },
+            { label: "Open Cases",     value: openCases,      color: "#7c3aed" },
           ].map((stat) => (
             <div key={stat.label} style={s.stat}>
               <div style={{ fontSize: 26, fontWeight: 800, color: stat.color }}>{stat.value}</div>
@@ -119,7 +115,7 @@ export default function CustomerDetailPage() {
           <div style={s.twoCol}>
             {/* LEFT */}
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {/* Profile card with Edit inside */}
+              {/* Profile card */}
               <div style={s.card}>
                 <div style={s.cardTitleRow}>
                   <div style={s.cardTitle}>Customer Profile</div>
@@ -129,20 +125,20 @@ export default function CustomerDetailPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {editError && <div style={s.errorBox}>⚠️ {editError}</div>}
                     {([
-                      { key: "fullName",            label: "Full Name *" },
-                      { key: "companyName",         label: "Company Name" },
-                      { key: "companyRegistration", label: "Company Reg No" },
-                      { key: "phone",               label: "Phone" },
-                      { key: "email",               label: "Email" },
+                      { key: "fullName",            label: "Full Name *"      },
+                      { key: "companyName",         label: "Company Name"     },
+                      { key: "companyRegistration", label: "Company Reg No"   },
+                      { key: "phone",               label: "Phone"            },
+                      { key: "email",               label: "Email"            },
                       { key: "idNumber",            label: "ID / Passport No" },
-                      { key: "address",             label: "Address" },
-                      { key: "notes",               label: "Notes" },
+                      { key: "address",             label: "Address"          },
+                      { key: "notes",               label: "Notes"            },
                     ] as { key: keyof Customer; label: string }[]).map(({ key, label }) => (
                       <div key={key} style={{ display: "grid", gap: 4 }}>
                         <label style={s.fieldLabel}>{label}</label>
                         {key === "notes"
                           ? <textarea style={{ ...s.fieldInput, height: 80, resize: "vertical" as const }} value={(editForm[key] as string) ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, [key]: e.target.value }))} />
-                          : <input style={s.fieldInput} value={(editForm[key] as string) ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, [key]: e.target.value }))} />}
+                          : <input   style={s.fieldInput} value={(editForm[key] as string) ?? ""} onChange={(e) => setEditForm((p) => ({ ...p, [key]: e.target.value }))} />}
                       </div>
                     ))}
                     <div style={{ display: "flex", gap: 8 }}>
@@ -153,14 +149,14 @@ export default function CustomerDetailPage() {
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {[
-                      { icon: "👤", label: "Full Name",      value: customer.fullName },
-                      { icon: "🏢", label: "Company Name",   value: customer.companyName },
-                      { icon: "📋", label: "Company Reg",    value: customer.companyRegistration },
-                      { icon: "📞", label: "Phone",          value: customer.phone },
-                      { icon: "✉️", label: "Email",          value: customer.email },
-                      { icon: "🪪", label: "ID / Passport",  value: customer.idNumber },
-                      { icon: "📍", label: "Address",        value: customer.address },
-                      { icon: "📝", label: "Notes",          value: customer.notes },
+                      { icon: "👤", label: "Full Name",     value: customer.fullName            },
+                      { icon: "🏢", label: "Company Name",  value: customer.companyName         },
+                      { icon: "📋", label: "Company Reg",   value: customer.companyRegistration },
+                      { icon: "📞", label: "Phone",         value: customer.phone               },
+                      { icon: "✉️", label: "Email",         value: customer.email               },
+                      { icon: "🪪", label: "ID / Passport", value: customer.idNumber            },
+                      { icon: "📍", label: "Address",       value: customer.address             },
+                      { icon: "📝", label: "Notes",         value: customer.notes               },
                     ].map(({ icon, label, value }) => (
                       <div key={label} style={s.profileRow}>
                         <div style={s.profileLabel}>{icon} {label}</div>
@@ -174,7 +170,7 @@ export default function CustomerDetailPage() {
                 )}
               </div>
 
-              {/* Contacts card */}
+              {/* Contacts */}
               <div style={s.card}>
                 <div style={s.cardTitleRow}>
                   <div style={s.cardTitle}>Contact Persons</div>
@@ -182,7 +178,7 @@ export default function CustomerDetailPage() {
                 </div>
                 {showAddContact && (
                   <div style={s.contactForm}>
-                    <input style={s.fieldInput} placeholder="Name *" value={newContact.name} onChange={(e) => setNewContact((p) => ({ ...p, name: e.target.value }))} />
+                    <input style={s.fieldInput} placeholder="Name *" value={newContact.name}  onChange={(e) => setNewContact((p) => ({ ...p, name: e.target.value }))} />
                     <input style={s.fieldInput} placeholder="Phone"  value={newContact.phone} onChange={(e) => setNewContact((p) => ({ ...p, phone: e.target.value }))} />
                     <input style={s.fieldInput} placeholder="Email"  value={newContact.email} onChange={(e) => setNewContact((p) => ({ ...p, email: e.target.value }))} />
                     <div style={{ display: "flex", gap: 8 }}>
@@ -223,7 +219,7 @@ export default function CustomerDetailPage() {
                   <button style={s.addBtn} onClick={() => router.push(`/cases?customerId=${id}`)}>+ New Case</button>
                 </div>
                 {customer.cases.length === 0 ? (
-                  <div style={s.emptyText}>No cases yet. Link a document from the Review page or click + New Case.</div>
+                  <div style={s.emptyText}>No cases yet. Click + New Case to create one.</div>
                 ) : customer.cases.map((c) => (
                   <div key={c.id} style={s.caseBlock}>
                     <div style={s.caseHeader}>
@@ -273,7 +269,7 @@ function JobList({ jobs, router }: { jobs: Job[]; router: ReturnType<typeof useR
 }
 
 const s: Record<string, React.CSSProperties> = {
-  shell:         { display: "flex", minHeight: "100vh", fontFamily: '"DM Sans", system-ui, sans-serif', background: "#f1f5f9" },
+  page:          { minHeight: "100vh", fontFamily: '"DM Sans", system-ui, sans-serif', background: "#f1f5f9", display: "flex", flexDirection: "column" },
   main:          { flex: 1, display: "flex", flexDirection: "column", overflow: "auto" },
   loading:       { padding: 40, textAlign: "center", color: "#94a3b8" },
   topbar:        { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 28px", background: "white", borderBottom: "1px solid rgba(15,23,42,0.08)" },
@@ -287,7 +283,7 @@ const s: Record<string, React.CSSProperties> = {
   statLabel:     { fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em", marginTop: 2 },
   body:          { padding: "24px 28px" },
   twoCol:        { display: "grid", gridTemplateColumns: "380px 1fr", gap: 20, alignItems: "start" },
-  card:          { background: "white", borderRadius: 14, border: "1px solid rgba(15,23,42,0.08)", padding: 20, boxShadow: "0 1px 4px rgba(2,8,23,0.04)", marginBottom: 0 },
+  card:          { background: "white", borderRadius: 14, border: "1px solid rgba(15,23,42,0.08)", padding: 20, boxShadow: "0 1px 4px rgba(2,8,23,0.04)" },
   cardTitleRow:  { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   cardTitle:     { fontWeight: 800, fontSize: 15, color: "#0f172a" },
   editBtn:       { padding: "6px 14px", borderRadius: 8, background: "#0f172a", color: "white", fontWeight: 700, fontSize: 12, border: "none", cursor: "pointer" },
