@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 
@@ -21,7 +21,7 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   CONFIRMED:  { bg: "#dcfce7", color: "#15803d" },
 };
 
-export default function CaseDetailPage() {
+function CaseDetailPageInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const id           = searchParams.get("id");
@@ -351,3 +351,11 @@ const s: Record<string, React.CSSProperties> = {
   commentSendBtn: { padding: "10px 18px", borderRadius: 10, background: "#0f172a", color: "white", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer" },
   commentShortcut:{ fontSize: 11, color: "#cbd5e1", textAlign: "right" as const },
 };
+
+export default function CaseDetailPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>Loading…</div>}>
+      <CaseDetailPageInner />
+    </Suspense>
+  );
+}

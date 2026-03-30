@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, Suspense} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type ExtractedData = {
@@ -16,7 +16,7 @@ type Status    = "idle" | "loading" | "done" | "error";
 
 const CASE_TYPES = ["Bond Application", "Insurance", "Invoice", "Loan", "Other"];
 
-export default function ReviewPage() {
+function ReviewPageInner() {
   const router = useRouter();
   const params = useSearchParams();
   const fileId   = params.get("fileId");
@@ -387,3 +387,11 @@ const s: Record<string, React.CSSProperties> = {
   confirmBtn:  { padding: "14px 20px", borderRadius: 12, border: "none", background: "#16a34a", color: "white", cursor: "pointer", fontWeight: 800, fontSize: 15, width: "100%" },
   empty:       { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 24px", textAlign: "center" as const },
 };
+
+export default function ReviewPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>Loading…</div>}>
+      <ReviewPageInner />
+    </Suspense>
+  );
+}
